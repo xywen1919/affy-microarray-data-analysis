@@ -7,13 +7,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, tidy = TRUE)
+
 ```
 
 ## QC analysis for macroarray dataset
 
 Data source: GSE32323 and GSE8671
 ##### import dataset 
-```{r cars}
+```{r}
 library(affy)
 raw32323 <- ReadAffy(celfile.path="GSE32323_RAW")
 raw8671 <- ReadAffy(celfile.path = "GSE8671_RAW")
@@ -34,13 +35,15 @@ Note that the `echo = FALSE` parameter was added to the code chunk to prevent pr
 
 ```{r}
 # briefly view the head rows 
-# df32323 <- as.data.frame(exprs(raw32323))
-# View(head(df32323))
+df32323 <- as.data.frame(exprs(raw32323))
+View(head(df32323))
 ```
 
+
+
 ```{r}
-# df8671 <- as.data.frame(exprs(raw8671))
-# View(head(df8671))#
+df8671 <- as.data.frame(exprs(raw8671))
+View(head(df8671))
 ```
 
 ### QC analysis 
@@ -50,17 +53,17 @@ library(arrayQualityMetrics)
 ```
 
 ```{r}
-arrayQualityMetrics(raw32323,
-  outdir = 'raw32323_QCReport',
-  force = TRUE,
-  do.logtransform = TRUE)
+# arrayQualityMetrics(raw32323,
+#   outdir = 'raw32323_QCReport',
+#   force = TRUE,
+#   do.logtransform = TRUE)
 ```
 
 ```{r}
-arrayQualityMetrics(raw8671,
-  outdir = 'raw8671_QCReport',
-  force = TRUE,
-  do.logtransform = TRUE)
+# arrayQualityMetrics(raw8671,
+#   outdir = 'raw8671_QCReport',
+#   force = TRUE,
+#   do.logtransform = TRUE)
 ```
 
 
@@ -72,36 +75,36 @@ library(affyPLM)
 ```{r}
 Pset32323 <- fitPLM(raw32323)
 
-pdf(file = "Pset32323_RLE.pdf", width = 6, height = 4)
-RLE(Pset32323)
-dev.off()
-
-pdf(file = "Pset32323_NUSE.pdf", width = 6, height = 4)
-NUSE(Pset32323)
-dev.off()
+# pdf(file = "Pset32323_RLE.pdf", width = 6, height = 4)
+# RLE(Pset32323)
+# dev.off()
+# 
+# pdf(file = "Pset32323_NUSE.pdf", width = 6, height = 4)
+# NUSE(Pset32323)
+# dev.off()
 ```
 
 
 ```{r}
 Pset8671 <- fitPLM(raw8671)
 
-pdf(file = "Pset8671_RLE.pdf", width = 6, height = 4)
-RLE(Pset8671)
-dev.off()
-
-pdf(file = "Pset8671_NUSE.pdf", width = 6, height = 4)
-NUSE(Pset8671)
-dev.off()
+# pdf(file = "Pset8671_RLE.pdf", width = 6, height = 4)
+# RLE(Pset8671)
+# dev.off()
+# 
+# pdf(file = "Pset8671_NUSE.pdf", width = 6, height = 4)
+# NUSE(Pset8671)
+# dev.off()
 ```
 
 ## background correction and normalization ####
 
 ```{r}
 exprset32323 <- rma(raw32323)
-write.exprs(exprset32323, file="exprset32323.txt")
-
+# write.exprs(exprset32323, file="exprset32323.txt")
+# 
 exprset8671 <- rma(raw8671)
-write.exprs(exprset8671, file="exprset8671.txt")
+# write.exprs(exprset8671, file="exprset8671.txt")
 ```
 
 ```{r}
@@ -142,7 +145,7 @@ library(sva)
 ```
 
 
-```{r}
+```{r pheno}
 # pheno input
 pheno <- rbind.data.frame(pData(exprset32323), pData(exprset8671))
 pheno['group'] <- c(rep(c("Normal","Cancer"),each=17),
@@ -151,30 +154,34 @@ pheno['group'] <- c(rep(c("Normal","Cancer"),each=17),
 pheno['batch'] <- c(rep(c("A","B"),c(44,64)))
 ```
 
-
 ```{r}
+# write.table(pheno, file = "combat_edata_metadta.txt", quote = FALSE, sep = "\t", row.names = TRUE, col.names = TRUE)
+```
+
+
+```{r edata}
 # edata input 
 edata = cbind(exprs(exprset32323),exprs(exprset8671))
 ```
 
-```{r}
+```{r mod}
 # create the full model matrix
 mod = model.matrix(~as.factor(group), data=pheno)
 #batch variable
 batch <- pheno$batch
 ```
 
-```{r}
-combat_edata = ComBat(dat=edata, batch=batch, mod=mod)
+```{r combat}
+combat_edata <- ComBat(dat=edata, batch=batch, mod=mod)
 
 ```
 
 ```{r}
 dim(combat_edata)
-write.table(combat_edata, file = "combat_edata.txt")
+# write.table(combat_edata, file = "combat_edata.txt")
 ```
 
-```{r}
+```{r symboidprob}
 # convert affymatrix proble into gene symbols
 library(biomaRt)
 
@@ -183,11 +190,10 @@ probes <- row.names(combat_edata)
 mart <- biomaRt::useEnsembl(biomart="ensembl",
                             dataset="hsapiens_gene_ensembl")
 
-symbol_id_prob <- biomaRt::getBM(attributes=c("hgnc_symbol", "ensembl_gene_id",
-                            "affy_hg_u133_plus_2"),
-               filters = "affy_hg_u133_plus_2",
-               values = probes,
-               mart = mart)
+symbol_id_prob <- biomaRt::getBM(attributes=c("hgnc_symbol", "ensembl_gene_id", "affy_hg_u133_plus_2"),
+                                 filters = "affy_hg_u133_plus_2",
+                                 values = probes,
+                                 mart = mart)
 
 head(symbol_id_prob)
 ```
@@ -201,9 +207,11 @@ dim(symbol_id_prob)
 row.names(combat_edata)[1:5]
 ```
 
-```{r}
+```{r symbolidprob}
 # drop duplicates
-symbol_id_prob <- as.data.frame(symbol_id_prob %>% group_by(affy_hg_u133_plus_2) %>% slice(1))
+library(dplyr)
+# symbol_id_prob <- as.data.frame(symbol_id_prob %>% group_by(affy_hg_u133_plus_2) %>% slice(1))
+symbol_id_prob <- symbol_id_prob %>% distinct(affy_hg_u133_plus_2, .keep_all = TRUE)
 
 # set row name
 rownames(symbol_id_prob) <- symbol_id_prob$affy_hg_u133_plus_2
@@ -212,54 +220,61 @@ dim(symbol_id_prob)
 ```
 
 
-```{r}
+```{r merge_sampleidprob-combatedata}
 #Combine gene annotations with raw data
 combat_edata_symId=merge(symbol_id_prob,combat_edata, by="row.names", all = TRUE)
 
 #Write GCRMA-normalized, mapped data to file
-write.table(combat_edata_symId, file = "combat_edata_symId.txt", quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE)
+# write.table(combat_edata_symId, file = "combat_edata_symId.txt", quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE)
 ```
 
 
 ### read data ######################################################
 ```{r}
-# combat_edata_symId <- read.delim("C:/Users/wen_x/Downloads/R/Bioinfo/M3/combat_edata_symId.txt")
+# combat_edata_symId <- read.delim("combat_edata_symId.txt")
 ```
 
 
 
-```{r}
+```{r combine_edata_median-process}
 library(dplyr)
 # calculate median value for each gene
-combat_edata_symMedian <- combat_edata_symId  %>%  group_by(hgnc_symbol) %>% 
+combat_edata_symMedian <- combat_edata_symId  %>%  
+  group_by(hgnc_symbol) %>% 
   summarise_at(vars(colnames(combat_edata_symId[,5:112])),median)
+
 # drop rows with hgnc_symbo = na
 library(tidyr)
-combat_edata_symMedian <- as.data.frame(combat_edata_symMedian %>% drop_na(hgnc_symbol))
+combat_edata_symMedian <- combat_edata_symMedian %>% drop_na(hgnc_symbol)
 
 # use hgnc_symbl as row names
 rownames(combat_edata_symMedian) <- combat_edata_symMedian$hgnc_symbol
 ```
 
-```{r}
+```{r combin_edata_median}
 combat_edata_symMedian <- combat_edata_symMedian[,2:109]
 combat_edata_symMedian[1:3,1:3]
 ```
 
-
 ```{r}
+#Write GCRMA-normalized, mapped data to file
+# write.table(combat_edata_symMedian, file = "combat_edata_symMedian.txt", quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE)
+```
+
+
+```{r boxplot}
 ## DATA VISUALIZATIONS
 ##### boxplot
 
 boxplot(combat_edata_symMedian)
 
-pdf(file = "boxplot_combat_edata_symMedian.pdf")
-boxplot(combat_edata_symMedian)
-dev.off()
+# pdf(file = "boxplot_combat_edata_symMedian.pdf")
+# boxplot(combat_edata_symMedian)
+# dev.off()
 ```
 
 ##### PCA
-```{r}
+```{r pca}
 pca <- prcomp(t(combat_edata_symMedian), scale = FALSE, center = FALSE)
 
 ```
@@ -272,7 +287,7 @@ head(pca$x[,1:5])
 ```{r}
 library(ggplot2)
 ```
-```{r}
+```{r pheno2_pca1-2e.df}
 library(dplyr)
 pheno2 <- data.frame(pheno, batch_group = paste("batch",pheno$batch, pheno$group, sep = "_"))
 df <- merge(pheno2,pca$x[,1:2], by.x = 0, by.y = 0)
@@ -281,10 +296,10 @@ df <- merge(pheno2,pca$x[,1:2], by.x = 0, by.y = 0)
 ```{r}
 dim(df)
 ```
-```{r}
+```{r plotPCA1-2}
 plot(pca$x[,1], pca$x[,2])
 ```
-```{r}
+```{r principalComponent_importances}
 pca.var <- pca$sdev^2
 pca.var.per <- round(pca.var/sum(pca.var)*100, 1)
 barplot(pca.var.per, main="Scree Plot", xlab="Principal Component", ylab="Percent
@@ -292,7 +307,7 @@ Variation")
 ```
 
 
-```{r}
+```{r pcaGraph}
 ggplot(df, aes(PC1, PC2, color=batch_group, label=sample))+
   geom_point()+
   geom_text(size = 2.5, position = position_dodge(width = 1),
@@ -307,22 +322,22 @@ ggplot(df, aes(PC1, PC2, color=batch_group, label=sample))+
 ```
 
 ```{r}
-pdf(file = "PCA_combat_edata.pdf")
-ggplot(df, aes(PC1, PC2, color=batch_group, label=sample))+
-  geom_point()+
-  geom_text(size = 2.5, position = position_dodge(width = 1),
-    vjust = -0.5)+
-  stat_ellipse()+
-  xlab(paste("PC1 - ", pca.var.per[1], "%", sep="")) +
-  ylab(paste("PC2 - ", pca.var.per[2], "%", sep="")) +
-  theme_bw() +
-  ggtitle("PCA Graph")
-  
-dev.off()
+# pdf(file = "PCA_combat_edata.pdf")
+# ggplot(df, aes(PC1, PC2, color=batch_group, label=sample))+
+#   geom_point()+
+#   geom_text(size = 2.5, position = position_dodge(width = 1),
+#     vjust = -0.5)+
+#   stat_ellipse()+
+#   xlab(paste("PC1 - ", pca.var.per[1], "%", sep="")) +
+#   ylab(paste("PC2 - ", pca.var.per[2], "%", sep="")) +
+#   theme_bw() +
+#   ggtitle("PCA Graph")
+#   
+# dev.off()
 
 ```
 
-```{r}
+```{r top10Genes}
 ## get the name of the top 10 measurements (genes) that contribute
 ## most to pc1.
 loading_scores <- pca$rotation[,1]
@@ -334,18 +349,18 @@ top_10_genes ## show the names of the top 10 genes
  
 
 ```
-```{r}
+```{r showScores}
 pca$rotation[top_10_genes,1] ## show the scores (and +/- sign)
 ```
 
 
 #####Correlation Heatmaps
-```{r}
+```{r load_pheatmap}
 library(pheatmap)
 ```
 
 
-```{r}
+```{r dendrogram}
 # hierarchical clustering in the same manner as performed by pheatmap to obtain gene clusters
 library(dendextend)
 hclust_gene <- hclust(dist(combat_edata_symMedian), method = "complete")
@@ -356,14 +371,14 @@ as.dendrogram(hclust_gene) %>%
 
 
 
-```{r}
+```{r gene_cluster}
 # cut tree for k = 3
 gene_row <- cutree(tree = as.dendrogram(hclust_gene), k = 3)
 gene_row <- as.data.frame(gene_row) 
 head(gene_row)
 ```
 
-```{r}
+```{r gene_row}
 # add random numbers 1:3
 set.seed(1000)
 thr_random <- as.factor(sample(x = 1:3, size = nrow(gene_row), replace = TRUE))
@@ -371,7 +386,7 @@ gene_row$random <- thr_random
 head(gene_row)
 ```
 
-```{r}
+```{r sample_col}
 sample_col <- cbind.data.frame(df$Row.names,df$group)
 rownames(sample_col) <- sample_col$`df$Row.names`
 colnames(sample_col) <- c('rownames','group')
@@ -379,17 +394,48 @@ sample_col <- subset (sample_col, select = group)
 head(sample_col)
 ```
 
-
-```{r}
-pheatmap(combat_edata_symMedian, annotation_row = gene_row, annotation_col = sample_col, 
-         show_rownames = FALSE, show_colnames = FALSE)
+### heatmap of gene correlation
+```{r pheatmap1}
+# calculate correlation
+combat_edata_symMedian_cor <- cor(combat_edata_symMedian)
+combat_edata_symMedian_cor[1:3,1:3]
+library(pheatmap)
+pheatmap((1 - combat_edata_symMedian_cor), annotation_row = sample_col, annotation_col = sample_col,
+         # show_rownames = FALSE, show_colnames = FALSE,
+         fontsize = 8, fontsize_row = 5, fontsize_col = 5
+)
 ```
 
 ```{r}
-pdf(file="pheatmap2.pdf")
-pheatmap(combat_edata_symMedian, annotation_row = gene_row, annotation_col = sample_col, 
-         show_rownames = FALSE, show_colnames = FALSE)
-dev.off()
+# pdf(file="pheatmap.pdf")
+# pheatmap((1 - combat_edata_symMedian_cor), annotation_row = sample_col, annotation_col = sample_col,
+#          # show_rownames = FALSE, show_colnames = FALSE,
+#          fontsize = 8, fontsize_row = 5, fontsize_col = 5
+# )
+# dev.off()
+```
+
+### heatmap of gene vs. sample
+```{r pheatmap2}
+# randomly select 100 rows for plotting
+library(pheatmap)
+
+pheatmap(combat_edata_symMedian[sample(nrow(combat_edata_symMedian), 100),],
+         # annotation_row = gene_row,
+         annotation_col = sample_col,
+         # show_rownames = FALSE,
+         fontsize_row = 3,
+         show_colnames = FALSE,
+         # fontsize_col = 3,
+         fontsize = 8)
+         
+```
+
+```{r}
+# pdf(file="pheatmap2.pdf")
+# pheatmap(combat_edata_symMedian, annotation_row = gene_row, annotation_col = sample_col, 
+#          show_rownames = FALSE, show_colnames = FALSE)
+# dev.off()
 ```
 
 

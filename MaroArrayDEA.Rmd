@@ -1,0 +1,110 @@
+---
+title: "MacroArrayDEA"
+author: "XWen"
+date: "June 27, 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, tidy = TRUE)
+```
+
+## import data from qc part
+
+```{r import data}
+combat_edata_symId <- read.delim("combat_edata_symId.txt")
+combat_edata_metadta <- read.delim("combat_edata_metadta.txt")
+```
+
+##### filter the sample from edata and metadata {cellular expr data from gse32323; #13 from gse8671}
+```{r}
+edata <- combat_edata_symId[,-c(39:48, 61)]
+edata_meta <- combat_edata_metadta[-c(35:44,57),]
+```
+
+##### drop rows with na, drop duplicate gene name
+```{r}
+edata <- edata[complete.cases(edata),]
+dim(edata)
+
+library(dplyr)
+edata <- edata %>% distinct(hgnc_symbol, .keep_all = TRUE)
+dim(edata)
+```
+
+##### drop genes with rowMean lower than 2% of the 
+```{r}
+low2p <- quantile(as.matrix(edata[,c(5:101)]), probs = 0.02)
+low2p
+
+edata <- edata[rowMeans(edata[,c(5:101)])>low2p,]
+dim(edata)
+```
+##### clean edata
+```{r}
+edat <- edata[,c(5:101)]
+rownames(edat) <- edata$hgnc_symbol
+edat[1:3, 1:3]
+```
+
+```{r}
+library(limma)
+
+mm <- model.matrix(~edata_meta$group)
+fit <- lmFit(edat,mm)
+fit <- eBayes(fit)
+topTable(fit)
+```
+
+```{r}
+names(res1)
+```
+
+
+```{r}
+# sorted DGE result write to file
+res1 <- topTable(fit, number = nrow(edat))
+res1 <- res1[order(res1$adj.P.Val),]
+write.table(res1, "DGE_padjSorted.txt", quote = FALSE, sep = "\t", row.names = TRUE, col.names = TRUE)
+
+# the number of significant genes with an adjusted p-value < 0.05
+nrow(res1[res1$adj.P.Val < 0.05,])
+```
+##### Data visualization - valcano plot
+```{r}
+library(EnhancedVolcano)
+EnhancedVolcano(res1,
+                lab = rownames(res1),
+                x = 'logFC',
+                y = 'P.Value')
+```
+
+```{r}
+pdf("valcano plot of DGE analysis.pdf")
+EnhancedVolcano(res1,
+                lab = rownames(res1),
+                x = 'logFC',
+                y = 'P.Value')
+dev.off()
+```
+
+##### Data visualization - valcano plot
+```{r}
+res2 <- topTable(fit, number = 50)
+edata_meta$bgroup <- paste0(edata_meta$batch,"_",edata_meta$group)
+edat_sub <- edat[rownames(edat)%in%rownames(res2),]
+
+library(pheatmap)
+pheatmap(edat_sub,
+         annotation_col = edata_meta['bgroup'],
+         fontsize = 8, fontsize_row = 3.5, fontsize_col = 3.5)
+```
+
+```{r}
+pdf("heatmap of topTable 50.pdf")
+pheatmap(edat_sub,
+         annotation_col = edata_meta['bgroup'],
+         fontsize = 8, fontsize_row = 3.5, fontsize_col = 3.5)
+dev.off()
+```
+

@@ -1,0 +1,280 @@
+---
+title: "FunctionAnalysis"
+author: "XWen"
+date: "June 29, 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, tidy = TRUE)
+```
+
+## GENERATE DEG VECTOR
+
+```{r importData & select up-gragulated genes & sorted by logFC}
+# import dataset
+DGE_padjSorted <- read.delim("DGE_padjSorted.txt")
+dim(DGE_padjSorted)
+
+# rownames to column as Gene
+library(tibble)
+DGE_padjSorted <- tibble::rownames_to_column(DGE_padjSorted, "Gene")
+
+# select logFC > 1.5 & extract logFC column
+DGE_FilteredSorted <- DGE_padjSorted[DGE_padjSorted$logFC > 1.5, 1:2]
+# sorted according to  logFC 
+DGE_FilteredSorted <- DGE_FilteredSorted[order(DGE_FilteredSorted$logFC, decreasing = TRUE),]
+
+# set gene as rowname
+rownames(DGE_FilteredSorted) <- DGE_FilteredSorted[,1]
+# drop gene column
+DGE_FilteredSorted <- subset(DGE_FilteredSorted, select=-Gene)
+
+# check dimension
+dim(DGE_FilteredSorted)
+```
+
+
+##### add ENTREZ IDs to the DGE result
+```{r loadAnnotationLibrary}
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+keytypes(org.Hs.eg.db)
+```
+
+```{r addAnnotation ENTREZID}
+# select()returned 1:1 mapping between keys and columns
+annots <- select(org.Hs.eg.db,keys=rownames(DGE_FilteredSorted),
+                 columns=c("SYMBOL","ENTREZID"),keytype="SYMBOL") 
+# merge annotation with logFC df
+resultTable <- merge(DGE_FilteredSorted,annots,by.x=0,by.y="SYMBOL")
+# set gene as row name
+rownames(resultTable) <- resultTable[,1]
+# drop gene column
+resultTable <- subset(resultTable,select=-Row.names)
+resultTable <- resultTable[order(resultTable$logFC, decreasing = TRUE),]
+head(resultTable)
+```
+
+```{r save results}
+# save the results
+write.table(annots, file = "annotation_logFC_filtered.txt",quote = FALSE, sep = "\t", row.names = TRUE, col.names = TRUE)
+write.table(resultTable, file = "dgewAnno_logFC_filtered.txt",quote = FALSE, sep = "\t", row.names = TRUE, col.names = TRUE)
+write.table(DGE_FilteredSorted, file = "DGElogFC_filtered.txt",quote = FALSE, sep = "\t", row.names = TRUE, col.names = TRUE)
+```
+
+
+## FUNCTIONAL ENRICHMENT ANALYSIS
+```{r fx enrichment analysis}
+library(clusterProfiler)
+# Gene Ontology that the up-regulated DEG are involved in
+# cellular components 
+enrich_cc <- enrichGO(annots$ENTREZID, keyType = "ENTREZID",
+                      OrgDb = org.Hs.eg.db,
+                      ont = "CC", 
+                      readable = TRUE)
+
+# molecular functions 
+enrich_mf <- enrichGO(annots$ENTREZID, keyType = "ENTREZID",
+                      OrgDb = org.Hs.eg.db,
+                      ont = "MF", 
+                      readable = TRUE)
+
+# biological processes 
+enrich_bp <- enrichGO(annots$ENTREZID, keyType = "ENTREZID",
+                      OrgDb = org.Hs.eg.db,
+                      ont = "BP", 
+                      readable = TRUE)
+```
+
+##### Visualization of Results
+
+```{r enrichGO barplot CC}
+# up-regulated DGE genes involved significant cellular components
+barplot(enrich_cc)
+
+pdf("up_gene_CellComponent.pdf")
+barplot(enrich_cc)
+dev.off()
+```
+
+```{r enrichGO barplot BP}
+# up-regulated DGE genes involved significant biological process
+barplot(enrich_bp)
+
+pdf("up_gene_BioProcess.pdf")
+barplot(enrich_bp)
+dev.off()
+```
+
+```{r enrichGO barplot MF}
+# up-regulated DGE genes involved significant molecular function
+barplot(enrich_mf)
+
+pdf("up_gene_molecularfx.pdf")
+barplot(enrich_mf)
+dev.off()
+```
+
+
+##### KEGG (Kyoto Encyclopedia of Genes and Genomes) Analysis
+
+```{r enrichKEGG dotplot}
+enrich_kegg <- enrichKEGG(annots$ENTREZID)
+dotplot(enrich_kegg)
+
+pdf("up_gene_keggPathways.pdf")
+dotplot(enrich_kegg)
+dev.off()
+```
+
+## GENE-CONCEPT NETWORK
+```{r enrichedKEGG involved gene network}
+# to know which genes are involved in those terms
+enrich_keggGene <- setReadable(enrich_kegg,OrgDb = org.Hs.eg.db,keyType = "ENTREZID")
+
+# visualize network
+cnetplot(enrich_keggGene,foldChange = DGE_FilteredSorted$logFC, categorySize='pvalue',colorEdge = TRUE)
+
+pdf("geneNetwork_enrichKEGG.pdf")
+cnetplot(enrich_keggGene,foldChange = DGE_FilteredSorted$logFC, categorySize='pvalue',colorEdge = TRUE)
+dev.off()
+```
+
+## GLOBAL/ UNIVERSAL GENE SET ENRICHMENT ANALYSIS (GSEA)
+
+```{r GSEA - download GSEA-MsigDB H set}
+# download <H: hallmark gene sets collection> from GSEA-MsigDB
+library(msigdbr)
+
+# obtain gene set
+msig <- msigdbr(species="Homo sapiens", category="H")
+
+# select desired information
+h <- msig %>% select (gs_name, entrez_gene)
+```
+
+##### Generating Global DEG Vector including all of the DGE sorted by logFC (in descending order) named with ENTREZIDs.
+```{r load dge result & sorted by logFC, & extract logFC}
+DGE_sorted <- read.delim("DGE_padjSorted.txt")
+
+# order by logFC
+DGE_sorted <- DGE_sorted[order(DGE_sorted$logFC, decreasing = TRUE),]
+
+# subset of DGE_sorted by selecting logFC
+DGE_sorted <- subset(DGE_sorted,select=logFC)
+dim(DGE_sorted)
+```
+
+##### add entrezid to the df
+```{r load annotationDbi library}
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+keytypes(org.Hs.eg.db)
+```
+
+```{r convert symbol to enterezid, merge with logFC df & extract sorted logFC, named with entrezid}
+# select()returned 1:1 mapping between keys and columns
+annots_all <- AnnotationDbi::select(org.Hs.eg.db, keys=rownames(DGE_sorted),
+                                    columns=c("SYMBOL","ENTREZID"),
+                                    keytype="SYMBOL") 
+
+# merge annotation with logFC df
+resultTable_all <- merge(DGE_sorted,annots_all,by.x=0,by.y="SYMBOL")
+
+# rename column names
+names(resultTable_all) <- c("Gene", "logFC", "ENTREZID")
+
+# drop na and duplicates of entrezid
+library(tidyr)
+library(dplyr)
+resultTable_all <- resultTable_all%>% drop_na(ENTREZID) %>% distinct(ENTREZID, .keep_all = TRUE)
+
+
+# # set entrezid as row name
+# rownames(resultTable_all) <- resultTable_all[,3]
+# # drop entrezid column
+# resultTable_all <- subset(resultTable_all,select=-ENTREZID)
+# # sorted by logFC
+# resultTable_all <- resultTable_all[order(resultTable_all$logFC, decreasing = TRUE),]
+# head(resultTable_all)
+
+
+# # drop na and duplicates of gene
+# library(tidyr)
+# library(dplyr)
+# resultTable_all <- resultTable_all%>% drop_na(Gene) %>% distinct(Gene, .keep_all = TRUE)
+
+
+
+# sorted by logFC 
+resultTable_all <- resultTable_all[order(resultTable_all$logFC, decreasing = TRUE),]
+
+# extract the logFC
+result_logFC <- resultTable_all$logFC
+# name the vector
+names(result_logFC) <- resultTable_all$ENTREZID
+ 
+result_logFC[1:5]
+```
+
+#### GSEA analysis
+```{r gsea analysis of the sorted logFC named by entrezid}
+# Perform GSEA Analysis
+gsea_res <- GSEA(result_logFC, TERM2GENE=h)
+```
+
+
+```{r gsea geneset id}
+# view gene set ID
+gsea_res@result$ID
+```
+
+```{r gsea plot 1:5}
+# view gsea plot
+library(enrichplot)
+gseaplot2(gsea_res,geneSetID = 1:5 )
+
+pdf("gse_plot.pdf")
+gseaplot2(gsea_res,geneSetID = 1:5 )
+dev.off()
+```
+
+```{r gsea plot 22:27}
+gseaplot2(gsea_res,geneSetID = 22:27 )
+pdf("gse_plot2.pdf")
+gseaplot2(gsea_res,geneSetID = 22:27 )
+dev.off()
+```
+
+#### TRANSCRIPTION FACTOR ANALYSIS
+
+```{r download GSEA-MsigDB C3 set: regulatory gene set}
+# download <C3: regulatory gene sets collection> from GSEA-MsigDB
+library(msigdbr)
+
+# obtain gene set
+msigc3 <- msigdbr(species="Homo sapiens", category="C3")
+
+# select desired information
+c3 <- msigc3 %>% select (gs_name, entrez_gene)
+```
+
+
+```{r enrich up-regulated c3 gene set collection}
+upEntrezid_c3_enricher <- enricher(resultTable$ENTREZID,TERM2GENE = c3)
+
+# Convert ENTREZIDs to Gene Symbols
+upGene_c3_enricher <- setReadable(upEntrezid_c3_enricher,OrgDb=org.Hs.eg.db, keyType = "ENTREZID")
+
+```
+
+
+```{r visual up-enriched regulatory gene network}
+cnetplot(upGene_c3_enricher,foldChange=resultTable$logFC, categorySize="pvalue", colorEdge = TRUE)
+
+pdf("geneNet_transcriptionFactors_4upGenes.pdf")
+cnetplot(upGene_c3_enricher,foldChange=resultTable$logFC, categorySize="pvalue", colorEdge = TRUE)
+dev.off()
+```
+
